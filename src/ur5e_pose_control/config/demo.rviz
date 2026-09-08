@@ -1,0 +1,62 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+    Help Height: 0
+Visualization Manager:
+  Class: ""
+  Global Options:
+    Background Color: 48; 48; 48
+    Fixed Frame: base_link
+    Frame Rate: 30
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid (10 cm)
+      Enabled: true
+      Cell Size: 0.1
+      Plane Cell Count: 20
+      Color: 120; 120; 120
+      Alpha: 0.5
+      Reference Frame: <Fixed Frame>
+    - Class: rviz_default_plugins/RobotModel
+      Name: UR5e joint feedback
+      Enabled: true
+      Visual Enabled: true
+      Collision Enabled: false
+      Alpha: 1
+      Description Source: Topic
+      Description Topic:
+        Value: /robot_description
+        Reliability Policy: Reliable
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Depth: 1
+      Links:
+        All Links Enabled: true
+    - Class: rviz_default_plugins/Axes
+      Name: Tool orientation (XYZ)
+      Enabled: true
+      Reference Frame: tool0
+      Length: 0.15
+      Radius: 0.006
+  Tools:
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/FocusCamera
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 1.9
+      Pitch: 0.35
+      Yaw: 0.7
+      Focal Point:
+        X: 0
+        Y: 0.1
+        Z: 0.5
+      Target Frame: <Fixed Frame>
+      Near Clip Distance: 0.01
+Window Geometry:
+  Width: 1280
+  Height: 760
+  X: 0
+  Y: 0
+  Hide Left Dock: false
+  Hide Right Dock: true

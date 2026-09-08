@@ -1,0 +1,11 @@
+name: mowito-ur5e
+services:
+  robot:
+    build: .
+    platform: linux/arm64
+    ports:
+      - "127.0.0.1:6080:6080"
+    volumes:
+      - .:/workspace:ro
+    shm_size: 512mb
+    stop_grace_period: 15s
