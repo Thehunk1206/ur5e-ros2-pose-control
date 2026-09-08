@@ -1,0 +1,9 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.pytest_cache/
+build/
+install/
+log/
+artifacts/
+.docker-cli/

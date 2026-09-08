@@ -1,0 +1,5 @@
+# This demo uses ideal mock hardware; 100 Hz is enough for visible motion.
+# The real UR5e's control rate should use the official hardware configuration.
+controller_manager:
+  ros__parameters:
+    update_rate: 100
