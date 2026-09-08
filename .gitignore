@@ -7,3 +7,4 @@ install/
 log/
 artifacts/
 .docker-cli/
+.venv-mujoco/
