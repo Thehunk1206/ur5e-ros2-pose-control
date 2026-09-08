@@ -16,30 +16,35 @@ Conventions:
     Controlled tool frame: ``tool0`` (the bare arm, without a gripper offset).
 
 ``--current`` only reads feedback. ``--plan-only`` solves IK and plans a path
-without executing it. Argument parsing and small mathematical helpers live in
+without executing it. ``--export-plan FILE`` also saves that plan for MuJoCo.
+Argument parsing and small mathematical helpers live in
 ``pose_math.py``. Each command creates one client node and exits when finished.
 """
 
+import json
 import math
 import time
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 import rclpy
 from action_msgs.msg import GoalStatus
-from geometry_msgs.msg import Quaternion
+from geometry_msgs.msg import Pose, Quaternion
 from moveit_msgs.action import MoveGroup
 from moveit_msgs.msg import (
+    CollisionObject,
     Constraints,
     JointConstraint,
     MoveItErrorCodes,
     PlanningSceneComponents,
 )
-from moveit_msgs.srv import GetPositionIK, GetPlanningScene
+from moveit_msgs.srv import GetPositionFK, GetPositionIK, GetPlanningScene
 from rcl_interfaces.srv import GetParameters
 from rclpy.action import ActionClient
 from rclpy.node import Node
 from rclpy.signals import SignalHandlerOptions
 from rclpy.time import Time
+from shape_msgs.msg import SolidPrimitive
 from tf2_ros import Buffer, TransformException, TransformListener
 
 from ur5e_pose_control.pose_math import nearest_joint_angle, parse_args, pose_error
@@ -286,18 +291,79 @@ class PoseClient(Node):
 
         return state, limits
 
-    def move(self, position, quaternion, plan_only=False):
+    def export_plan(self, result, position, quaternion, limits, filename):
+        """Save a timed plan plus ROS FK samples for the native MuJoCo runner.
+
+        FK means forward kinematics: joint angles -> tool pose. The samples let
+        the runner verify its model against MoveIt before simulating any motion.
+        This method is only used after a successful planning-only request.
+        """
+        trajectory = result.planned_trajectory.joint_trajectory
+        if not trajectory.points:
+            raise RuntimeError("Cannot export an empty trajectory.")
+        client = self.create_client(GetPositionFK, "/compute_fk")
+        try:
+            if not client.wait_for_service(timeout_sec=5.0):
+                raise RuntimeError("MoveIt forward-kinematics service is unavailable.")
+            samples = []
+            indices = {0, len(trajectory.points) // 2, len(trajectory.points) - 1}
+            for index in sorted(indices):
+                point = trajectory.points[index]
+                request = GetPositionFK.Request()
+                request.header.frame_id = BASE
+                request.fk_link_names = [TOOL]
+                request.robot_state.joint_state.name = trajectory.joint_names
+                request.robot_state.joint_state.position = point.positions
+                response = self.wait(client.call_async(request), 5.0, "model FK sample")
+                if response.error_code.val != MoveItErrorCodes.SUCCESS:
+                    raise RuntimeError("Could not calculate the plan's reference tool poses.")
+                pose = response.pose_stamped[0].pose
+                samples.append({
+                    "positions": list(point.positions),
+                    "position": [pose.position.x, pose.position.y, pose.position.z],
+                    "quaternion": [
+                        pose.orientation.x, pose.orientation.y,
+                        pose.orientation.z, pose.orientation.w,
+                    ],
+                })
+        finally:
+            self.destroy_client(client)
+        payload = {
+            "version": 1,
+            "robot": "ur5e",
+            "base_frame": BASE,
+            "tool_frame": TOOL,
+            "target": {"position": list(position), "quaternion": list(quaternion)},
+            "joint_names": list(trajectory.joint_names),
+            "joint_limits": {name: limits[name] for name in trajectory.joint_names},
+            "points": [{
+                "time": p.time_from_start.sec + p.time_from_start.nanosec * 1e-9,
+                "positions": list(p.positions),
+                "velocities": list(p.velocities),
+                "accelerations": list(p.accelerations),
+            } for p in trajectory.points],
+            "fk_samples": samples,
+        }
+        Path(filename).write_text(json.dumps(payload, indent=2, allow_nan=False) + "\n")
+        print(
+            f"EXPORTED: {len(trajectory.points)} trajectory points to {filename}",
+            flush=True,
+        )
+
+    def move(self, position, quaternion, plan_only=False, export_path=None):
         """Solve IK, request a plan/motion, and verify the reported final pose.
 
         Args:
             position: Target (x, y, z) in metres relative to BASE.
             quaternion: Target orientation as normalized (x, y, z, w).
             plan_only: If True, stop after successful planning without moving.
+            export_path: Optional JSON output file; always implies planning only.
 
         Print progress and return None on success. Failures raise an exception
         for main() to report and, when needed, cancel the pending action.
         Successful planning alone does not verify an executed final pose.
         """
+        plan_only = plan_only or export_path is not None
         # 1. Require the server and live robot feedback before asking for motion.
         if not self.action.wait_for_server(timeout_sec=15.0):
             raise RuntimeError(
@@ -323,8 +389,22 @@ class PoseClient(Node):
         print("IK SUCCESS: found joint angles for the requested pose.", flush=True)
 
         # 3. Send the joint goal. Acceptance only means the server will process it.
+        goal = make_goal(solution.solution.joint_state, current, limits, plan_only)
+        if export_path is not None:
+            # MuJoCo has a ground plane at z=0. Include the same surface in this
+            # request's scene diff, without changing the shared RViz demo scene.
+            floor = CollisionObject(id="mujoco_floor", operation=CollisionObject.ADD)
+            floor.header.frame_id = BASE
+            floor.primitives = [
+                SolidPrimitive(type=SolidPrimitive.BOX, dimensions=[20.0, 20.0, 0.1])
+            ]
+            floor_pose = Pose()
+            floor_pose.position.z = -0.05
+            floor_pose.orientation.w = 1.0
+            floor.primitive_poses = [floor_pose]
+            goal.planning_options.planning_scene_diff.world.collision_objects = [floor]
         self.goal_future = self.action.send_goal_async(
-            make_goal(solution.solution.joint_state, current, limits, plan_only),
+            goal,
             feedback_callback=self.feedback,
         )
         self.goal_handle = self.wait(self.goal_future, 10.0, "goal acceptance")
@@ -353,6 +433,8 @@ class PoseClient(Node):
 
         # 5. A preview finishes here: there is no executed pose to verify.
         if plan_only:
+            if export_path is not None:
+                self.export_plan(response.result, position, quaternion, limits, export_path)
             print(
                 "PLAN SUCCESS: a trajectory was found; no execution was requested.",
                 flush=True,
@@ -455,7 +537,7 @@ def main(argv=None):
                 f"position={args.position}, quaternion={args.quaternion}",
                 flush=True,
             )
-            node.move(args.position, args.quaternion, args.plan_only)
+            node.move(args.position, args.quaternion, args.plan_only, args.export_plan)
     except KeyboardInterrupt:
         node.cancel()
         exit_code = 130

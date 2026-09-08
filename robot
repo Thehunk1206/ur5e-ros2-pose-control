@@ -12,7 +12,11 @@ if [[ "$command" == help || "$command" == --help ]]; then
 ./robot move --position X Y Z --rpy-deg R P Y
                                Move to a pose (metres and degrees)
 ./robot move ... --plan-only    Check planning without executing
-./robot test                    Run unit and simulation integration tests
+./robot mujoco-setup            Install native MuJoCo in a local Python environment
+./robot mujoco --position X Y Z --rpy-deg R P Y
+                               Plan in ROS, then simulate in native MuJoCo
+./robot mujoco ... --headless   Verify physics without opening a window
+./robot export FILE ...         Save a MoveIt plan as JSON without executing
 ./robot logs                    Follow startup and robot logs
 ./robot shell                   Open a ROS-ready Linux shell
 ./robot stop                    Stop this project's container
@@ -20,6 +24,22 @@ if [[ "$command" == help || "$command" == --help ]]; then
 RViz: http://localhost:6080/vnc.html?autoconnect=true&resize=scale
 HELP
   exit 0
+fi
+
+# These commands run on macOS. Only planning needs the ROS container.
+if [[ "$command" == mujoco-setup ]]; then
+  python_bin=python3
+  if command -v python3.12 >/dev/null 2>&1; then python_bin=python3.12; fi
+  "$python_bin" -m venv .venv-mujoco
+  .venv-mujoco/bin/python -m pip install -r simulation/requirements.txt
+  exit 0
+fi
+if [[ "$command" == mujoco ]]; then
+  if [[ ! -x .venv-mujoco/bin/mjpython ]]; then
+    echo 'Run ./robot mujoco-setup first.' >&2
+    exit 1
+  fi
+  exec .venv-mujoco/bin/mjpython simulation/mujoco_demo.py "$@"
 fi
 
 docker_cmd=(docker)
@@ -54,7 +74,15 @@ case "$command" in
     ;;
   pose) "${compose[@]}" exec "${exec_flags[@]}" robot bash /opt/demo/ros-env.sh ros2 run ur5e_pose_control move_to_pose --current "$@" ;;
   move) "${compose[@]}" exec "${exec_flags[@]}" robot bash /opt/demo/ros-env.sh ros2 run ur5e_pose_control move_to_pose "$@" ;;
-  test) "${compose[@]}" exec -T robot bash /opt/demo/ros-env.sh python3 /workspace/tests/integration.py ;;
+  export)
+    if [[ $# -lt 1 ]]; then echo 'Usage: ./robot export FILE --position X Y Z --rpy-deg R P Y' >&2; exit 2; fi
+    output=$1
+    shift
+    temporary=$("${compose[@]}" exec -T robot mktemp /tmp/ur5e-plan-XXXXXX.json)
+    trap '"${compose[@]}" exec -T robot rm -f "$temporary" >/dev/null 2>&1 || true' EXIT
+    "${compose[@]}" exec "${exec_flags[@]}" robot bash /opt/demo/ros-env.sh ros2 run ur5e_pose_control move_to_pose "$@" --export-plan "$temporary"
+    "${compose[@]}" cp "robot:$temporary" "$output"
+    ;;
   logs) "${compose[@]}" logs -f --tail=100 robot ;;
   shell) "${compose[@]}" exec robot bash /opt/demo/ros-env.sh bash ;;
   stop) "${compose[@]}" down ;;

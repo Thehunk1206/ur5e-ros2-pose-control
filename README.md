@@ -8,6 +8,11 @@ This implements **Stage 1** of the assignment: ROS 2, the official UR5e driver,
 Python terminal input, and RViz. The supplied launch always uses **mock hardware**.
 Isaac Sim is the optional Stage 2 and is not included.
 
+An additional **native macOS MuJoCo physics demo** reuses the same pose input and
+MoveIt planner. See the [MuJoCo setup and demo guide](simulation/README.md).
+MuJoCo executes exported plans using simulated motors; it does not replace the
+mandatory ROS driver/RViz demonstration or implement the Isaac Sim bonus.
+
 ## Requirements and the role of Colima
 
 This setup targets **Apple Silicon macOS** with an ARM64 Linux container. Docker
@@ -162,7 +167,6 @@ Run these commands from the project directory:
 | `./robot pose` | Print the current tool pose. |
 | `./robot move ...` | Plan and execute a target pose. |
 | `./robot logs` | Follow startup, planning, and controller logs. |
-| `./robot test` | Run unit and integration tests; the integration test moves the simulated robot. |
 | `./robot shell` | Open a container shell with ROS and this package already sourced. |
 | `./robot stop` | Stop and remove this project's container; keep the image and source files. |
 | `./robot help` | Print the available commands. |
@@ -219,7 +223,6 @@ container; generated ROS build files live inside the container.
 | [pose_math.py](src/ur5e_pose_control/ur5e_pose_control/pose_math.py) | Validate inputs, convert degrees to a quaternion, choose equivalent joint angles, and measure pose error. |
 | [demo.launch.py](src/ur5e_pose_control/launch/demo.launch.py) | Start UR's driver, MoveIt, and RViz using the supplied UR model/configuration. |
 | [robot](robot), [Dockerfile](Dockerfile), [docker/](docker/) | Mac/Linux setup and convenience commands; these contain no motion-planning logic. |
-| [tests/](tests/) | Input/math checks, ROS-message checks, and the simulation integration test. |
 
 The robot-specific names are constants: `base_link`, `tool0`, `ur_manipulator`.
 One process handles one command. There are no custom messages, custom planners,
@@ -279,52 +282,10 @@ returns a short calculation result; motion uses an action because it runs over t
 Exit codes: `0` success, `1` ROS/planning/execution/verification failure, `2` invalid
 arguments, `130` interrupted by Ctrl-C.
 
-## Checks
+## Verified environment
 
-With the container running and no other motion command in progress:
-
-```bash
-./robot test
-```
-
-This runs 12 unit tests followed by the integration test. It moves the simulated
-robot and deliberately exercises failure cases. Expected failure messages appear
-during the run; look for the final `PASS: planning, two executed poses, final-pose
-verification, and failure handling.` message to confirm the full test passed.
-
-Pure input/math tests also run directly on macOS, without ROS:
-
-```bash
-PYTHONPATH=src/ur5e_pose_control python3 -m unittest discover -s tests -v
-```
-
-Two ROS-message tests are skipped on the Mac and run inside the container.
-They also check that a full-turn IK angle is converted to its nearest legal
-equivalent without modifying the original IK response. The math tests cover both
-positive and negative full turns and cases where a closer angle would exceed a
-joint limit. `./robot test` checks actual
-message serialization, plan-only behaviour (including the regression pose
-`--position 0.2 0.2 0.2 --rpy-deg 20 0 0`), two
-executed goal poses (including an orientation change), final pose errors, an
-unreachable goal, bad input, and a missing action server. The test computes its
-goals using forward kinematics of the installed UR5e model and prints reusable
-demo commands when all checks pass.
-
-Initial validation on this Apple Silicon Mac on 2026-09-07: all 11 original container unit tests
-and the integration test passed. The two integration moves reported 0.04/0.05 mm
-position error and 0.010/0.011 degrees orientation error. Both short RPY commands
-above also executed successfully. An interactive Ctrl-C test returned cancellation
-status 5 (`CANCELED`), exit code 130, and unchanged feedback over the following
-one-second observation. These measurements come from ideal mock hardware.
-
-Tested packages: ROS 2 Jazzy, UR driver/config 3.8.0, MoveIt core 2.12.4,
-RViz 14.1.22, on a Colima VM with 4 CPUs and 6 GB RAM.
-
-After the joint-angle selection fix, all 12 unit tests passed. The regression pose
-and both README demo poses each passed three plan-only requests from the startup
-configuration (nine successful plans). Fresh feedback confirmed that neither
-position nor orientation changed during those requests. This regression check
-did not execute motion.
+ROS 2 Jazzy, UR driver/config 3.8.0, MoveIt core 2.12.4, and RViz 14.1.22,
+on a Colima VM with 4 CPUs and 6 GB RAM.
 
 ## Troubleshooting
 
@@ -356,17 +317,7 @@ target planned successfully. The script now chooses the nearest equivalent angle
 within the model's limits before planning. A different IK branch, joint limits, or collisions can still
 prevent planning. A timeout does not prove that the requested pose is unreachable.
 
-## A short explanation you can give
-
-"My Python node takes a position and orientation from the terminal. MoveIt first
-finds joint angles for that pose using inverse kinematics. It then plans a
-collision-checked joint trajectory and sends it to the ROS controller. The UR
-mock hardware publishes joint feedback, which RViz uses to display the motion.
-I wait for execution to finish and check the final tool pose against the input.
-I reuse the standard driver, IK solver, and planner; my code handles input,
-coordination, and verification."
-
-## Limitations to explain in the interview
+## Limitations
 
 - A pose can be unreachable even when its position looks nearby: orientation,
   joint limits, self-collision, and the starting configuration also matter.

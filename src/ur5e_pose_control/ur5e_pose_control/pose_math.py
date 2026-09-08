@@ -65,7 +65,10 @@ def parse_args(argv=None):
     orientation.add_argument("--quaternion", nargs=4, type=finite_number, metavar=("QX", "QY", "QZ", "QW"))
     parser.add_argument("--current", action="store_true", help="Print the current pose and exit.")
     parser.add_argument("--plan-only", action="store_true", help="Plan without moving the robot.")
+    parser.add_argument("--export-plan", metavar="FILE", help="Save a plan as JSON; implies --plan-only.")
     args = parser.parse_args(argv)
+    if args.export_plan:
+        args.plan_only = True
     if args.current:
         if args.position or args.rpy_deg or args.quaternion or args.plan_only:
             parser.error("Use --current on its own.")
