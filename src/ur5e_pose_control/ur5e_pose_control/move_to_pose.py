@@ -269,11 +269,17 @@ class PoseClient(Node):
         state = self.wait(
             self.scene.call_async(request), 5.0, "current joint state"
         ).scene.robot_state
-        description = self.wait(
-            self.model.call_async(GetParameters.Request(names=["robot_description"])),
-            5.0,
-            "robot model",
-        ).values[0].string_value
+        description = (
+            self.wait(
+                self.model.call_async(
+                    GetParameters.Request(names=["robot_description"])
+                ),
+                5.0,
+                "robot model",
+            )
+            .values[0]
+            .string_value
+        )
 
         limits = {}
         for joint in ET.fromstring(description).findall("joint"):
@@ -316,16 +322,22 @@ class PoseClient(Node):
                 request.robot_state.joint_state.position = point.positions
                 response = self.wait(client.call_async(request), 5.0, "model FK sample")
                 if response.error_code.val != MoveItErrorCodes.SUCCESS:
-                    raise RuntimeError("Could not calculate the plan's reference tool poses.")
+                    raise RuntimeError(
+                        "Could not calculate the plan's reference tool poses."
+                    )
                 pose = response.pose_stamped[0].pose
-                samples.append({
-                    "positions": list(point.positions),
-                    "position": [pose.position.x, pose.position.y, pose.position.z],
-                    "quaternion": [
-                        pose.orientation.x, pose.orientation.y,
-                        pose.orientation.z, pose.orientation.w,
-                    ],
-                })
+                samples.append(
+                    {
+                        "positions": list(point.positions),
+                        "position": [pose.position.x, pose.position.y, pose.position.z],
+                        "quaternion": [
+                            pose.orientation.x,
+                            pose.orientation.y,
+                            pose.orientation.z,
+                            pose.orientation.w,
+                        ],
+                    }
+                )
         finally:
             self.destroy_client(client)
         payload = {
@@ -336,12 +348,15 @@ class PoseClient(Node):
             "target": {"position": list(position), "quaternion": list(quaternion)},
             "joint_names": list(trajectory.joint_names),
             "joint_limits": {name: limits[name] for name in trajectory.joint_names},
-            "points": [{
-                "time": p.time_from_start.sec + p.time_from_start.nanosec * 1e-9,
-                "positions": list(p.positions),
-                "velocities": list(p.velocities),
-                "accelerations": list(p.accelerations),
-            } for p in trajectory.points],
+            "points": [
+                {
+                    "time": p.time_from_start.sec + p.time_from_start.nanosec * 1e-9,
+                    "positions": list(p.positions),
+                    "velocities": list(p.velocities),
+                    "accelerations": list(p.accelerations),
+                }
+                for p in trajectory.points
+            ],
             "fk_samples": samples,
         }
         Path(filename).write_text(json.dumps(payload, indent=2, allow_nan=False) + "\n")
@@ -434,7 +449,9 @@ class PoseClient(Node):
         # 5. A preview finishes here: there is no executed pose to verify.
         if plan_only:
             if export_path is not None:
-                self.export_plan(response.result, position, quaternion, limits, export_path)
+                self.export_plan(
+                    response.result, position, quaternion, limits, export_path
+                )
             print(
                 "PLAN SUCCESS: a trajectory was found; no execution was requested.",
                 flush=True,
@@ -453,10 +470,7 @@ class PoseClient(Node):
             flush=True,
         )
         # The tiny epsilon prevents floating-point rounding at the tolerance boundary.
-        if (
-            distance > POSITION_TOLERANCE + 1e-6
-            or angle > ORIENTATION_TOLERANCE + 1e-6
-        ):
+        if distance > POSITION_TOLERANCE + 1e-6 or angle > ORIENTATION_TOLERANCE + 1e-6:
             raise RuntimeError(
                 "Execution completed, but the reported final pose "
                 "is outside tolerance."

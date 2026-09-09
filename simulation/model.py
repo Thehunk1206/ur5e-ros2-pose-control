@@ -8,8 +8,12 @@ import numpy as np
 
 MODEL_DIR = Path(__file__).resolve().parent / "models" / "ur5e"
 JOINTS = (
-    "shoulder_pan_joint", "shoulder_lift_joint", "elbow_joint",
-    "wrist_1_joint", "wrist_2_joint", "wrist_3_joint",
+    "shoulder_pan_joint",
+    "shoulder_lift_joint",
+    "elbow_joint",
+    "wrist_1_joint",
+    "wrist_2_joint",
+    "wrist_3_joint",
 )
 
 
@@ -46,10 +50,17 @@ def load_model():
             existing.extend(child)
         else:
             arm.append(child)
-    ET.SubElement(arm.find("worldbody"), "site", {
-        "name": "target", "type": "sphere", "size": "0.012",
-        "rgba": "1 0.4 0.1 0.6", "group": "0",
-    })
+    ET.SubElement(
+        arm.find("worldbody"),
+        "site",
+        {
+            "name": "target",
+            "type": "sphere",
+            "size": "0.012",
+            "rgba": "1 0.4 0.1 0.6",
+            "group": "0",
+        },
+    )
     model = mujoco.MjModel.from_xml_string(ET.tostring(arm, encoding="unicode"))
     # This demo controls exactly six joints, in shoulder-to-wrist order. Keeping
     # that order fixed lets the physics loop work directly with six-value arrays.
