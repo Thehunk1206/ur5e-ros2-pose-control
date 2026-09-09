@@ -29,8 +29,11 @@ command prefers `python3.12`, falling back to `python3`.
 
 Terminal 1, from the project directory:
 
+First follow the [host installation and clone instructions](../README.md#installation-and-setup).
+The paths below assume the example clone location `~/projects/ur5e-ros2-pose-control`.
+
 ```bash
-cd /Users/tauhidkhan/Desktop/projects/mowito-robotics
+cd ~/projects/ur5e-ros2-pose-control
 ./robot mujoco-setup
 colima start --cpus 4 --memory 6 --disk 40 --vm-type vz
 docker context use colima
@@ -41,7 +44,7 @@ open 'http://localhost:6080/vnc.html?autoconnect=true&resize=scale'
 Wait for the robot to appear in RViz. Terminal 2:
 
 ```bash
-cd /Users/tauhidkhan/Desktop/projects/mowito-robotics
+cd ~/projects/ur5e-ros2-pose-control
 ./robot pose
 
 # Demonstrate the mandatory ROS driver + RViz motion first.
@@ -166,5 +169,4 @@ replay were unchanged.
   configuration, calibration, payload/TCP setup, and hardware validation.
 
 References: [MuJoCo Python API](https://mujoco.readthedocs.io/en/stable/python.html),
-[model source and adaptations](models/SOURCE.md),
-[Isaac Sim feasibility and future live bridge](../docs/physics-simulation-plan.md).
+[model source and adaptations](models/SOURCE.md).

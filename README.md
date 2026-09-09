@@ -13,11 +13,18 @@ MoveIt planner. See the [MuJoCo setup and demo guide](simulation/README.md).
 MuJoCo executes exported plans using simulated motors; it does not replace the
 mandatory ROS driver/RViz demonstration or implement the Isaac Sim bonus.
 
-## Requirements and the role of Colima
+## Installation and setup
 
-This setup targets **Apple Silicon macOS** with an ARM64 Linux container. Docker
-CLI, Docker Compose, Colima, and Python 3 are already installed on this Mac. The
-VM configuration below uses 4 CPUs, 6 GiB of memory, and a 40 GiB data disk.
+The verified setup is **Apple Silicon macOS**, using an ARM64 Linux container
+for ROS/RViz and native Python for the optional MuJoCo demo. The instructions
+below start from a fresh machine and clone; no personal folder paths are needed.
+
+You need Git, Python 3, Docker Engine, the Docker CLI, Compose, Buildx, and a web
+browser. On macOS, Colima supplies Docker Engine inside a Linux VM. Allow room
+for a 40 GiB VM disk; the example allocates 4 CPUs and 6 GiB RAM to the VM. A host
+with 16 GiB RAM is recommended when running both demos. Internet access is needed
+for the initial package/image downloads, and your GitHub account needs access to
+this private repository.
 
 | Component | What it does |
 | --- | --- |
@@ -31,37 +38,129 @@ VM configuration below uses 4 CPUs, 6 GiB of memory, and a 40 GiB data disk.
 the engine that the Docker CLI connects to. Colima does not perform the robot
 simulation or visualization; those programs run inside the container.
 
-The commands below use this Mac's project path. On another machine, change the
-`cd` command to the directory containing this README and install the prerequisites
-first. You do not need to install ROS or RViz directly on macOS.
+### 1. Install the host tools
 
-## Start the demo: Terminal 1
+**Apple Silicon macOS**
 
-Open Terminal on your Mac. Run these commands one at a time:
+If Homebrew is missing, install it using the command from
+[Homebrew's installation page](https://brew.sh/):
 
 ```bash
-cd /Users/tauhidkhan/Desktop/projects/mowito-robotics
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+Complete the installer's prompts, including any Command Line Tools installation
+and shell-profile instructions. Then install the project prerequisites:
+
+```bash
+eval "$(/opt/homebrew/bin/brew shellenv)"
+brew install git python@3.12 colima docker docker-compose docker-buildx
+export PATH="$(brew --prefix python@3.12)/libexec/bin:$PATH"
+
+# Make the Homebrew Compose and Buildx plugins discoverable by Docker.
+mkdir -p "$HOME/.docker/cli-plugins"
+ln -sfn "$(brew --prefix docker-compose)/bin/docker-compose" "$HOME/.docker/cli-plugins/docker-compose"
+ln -sfn "$(brew --prefix docker-buildx)/bin/docker-buildx" "$HOME/.docker/cli-plugins/docker-buildx"
 
 colima start --cpus 4 --memory 6 --disk 40 --vm-type vz
 docker context use colima
+```
+
+These commands use the CLI-only Colima setup. If Docker Engine and its plugins
+are already installed and working, reuse them and skip the installation steps.
+For a Homebrew-only installation, the plugin links above also let the project's
+isolated Docker CLI configuration find Compose and Buildx.
+Package details: [Compose](https://formulae.brew.sh/formula/docker-compose) and
+[Buildx](https://formulae.brew.sh/formula/docker-buildx).
+
+**Ubuntu Linux: alternative ROS/RViz setup**
+
+Install Docker Engine, CLI, Buildx, and the Compose plugin using
+[Docker's Ubuntu installation guide](https://docs.docker.com/engine/install/ubuntu/).
+On Linux, Docker Engine runs directly on the host; skip the Colima commands.
+Install the remaining host tools:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y git python3
+```
+
+Configure Docker access for your normal user as described in
+[Docker's Linux post-installation guide](https://docs.docker.com/engine/install/linux-postinstall/),
+then log out and back in. The `./robot` wrapper expects `docker info` to work
+without `sudo`. Docker group membership grants root-level access to the host.
+Follow the architecture step below before building. This Linux setup has not
+been validated by this project; the native MuJoCo wrapper is currently macOS-only.
+
+**Check the tools before continuing**
+
+```bash
+git --version
+python3 --version
+docker --version
+docker compose version
+docker buildx version
 docker info
+```
+
+`docker info` must show a running server as well as the client. You do not need
+to install ROS, MoveIt, the UR driver, or RViz on the host.
+
+### 2. Clone the repository
+
+
+```bash
+git clone https://github.com/Thehunk1206/ur5e-ros2-pose-control.git
+cd ur5e-ros2-pose-control
+```
+
+
+The robot model and its meshes are included in the clone; no separate model
+download is required. Run all remaining `./robot` commands from the cloned
+directory, which contains `robot`, `Dockerfile`, and `compose.yaml`.
+
+### 3. Check the container architecture
+
+```bash
+uname -m
+```
+
+[compose.yaml](compose.yaml) currently selects `platform: linux/arm64`.
+Keep this setting for Apple Silicon (`arm64`) or ARM64 Linux (`aarch64`).
+On an Intel/AMD Linux host (`x86_64`), change that line to
+`platform: linux/amd64` before building. The AMD64 build is not verified here.
+Intel macOS and Windows do not have a verified setup in this repository.
+
+### 4. Build and start ROS/RViz: Terminal 1
+
+```bash
+cd ~/projects/ur5e-ros2-pose-control
 
 ./robot start
 ```
 
-If Colima reports that it is already running, continue. `docker info` should show
-both client and server information. `./robot start` builds the image and starts
-the robot container in the background. The first build downloads ROS packages
-and takes several minutes; later starts reuse the image cache.
+`./robot start` builds the Docker image and starts the container. It runs Compose
+with `up --build -d`. To build the image separately before starting, you can use:
 
-Open RViz in your browser:
+```bash
+docker compose build
+./robot start
+```
+
+The Dockerfile installs ROS 2 Jazzy, the UR driver, MoveIt, RViz, `colcon`, and
+the display tools. Container startup then builds this ROS package from `src/`
+and launches the driver, MoveIt, and RViz. The first build takes several minutes;
+later builds reuse Docker's cache. You do not need to run `colcon` on the host.
+
+Open [RViz in your browser](http://localhost:6080/vnc.html?autoconnect=true&resize=scale).
+On macOS, you can also use:
 
 ```bash
 open 'http://localhost:6080/vnc.html?autoconnect=true&resize=scale'
 ```
 
-You can also paste [the RViz URL](http://localhost:6080/vnc.html?autoconnect=true&resize=scale)
-into your browser. Wait until the robot appears. Its red, green, and blue tool
+On Linux, paste the same URL into a browser on the Docker host. Wait until the
+robot appears. Its red, green, and blue tool
 axes represent X, Y, and Z. If the page opens before the display is ready, reload it.
 
 Show the startup and controller logs in Terminal 1:
@@ -74,13 +173,13 @@ This command keeps following the logs. Use a second terminal for motion commands
 Pressing Ctrl-C **while following logs** only stops the log viewer; the container
 continues running.
 
-## Move the robot: Terminal 2
+## Usage: move the robot in RViz
 
 Open another Terminal window and keep RViz visible beside it. Run each command
 separately, waiting for it to finish before starting the next one.
 
 ```bash
-cd /Users/tauhidkhan/Desktop/projects/mowito-robotics
+cd ~/projects/ur5e-ros2-pose-control
 ```
 
 ### 1. Read the current tool pose
@@ -137,6 +236,28 @@ code 1 without moving the robot. It demonstrates error handling.
 Pressing Ctrl-C **during a move command** requests cancellation of that motion
 and waits for the action's final state. The client exits with code 130.
 
+## Optional: native MuJoCo on Apple Silicon macOS
+
+With ROS/MoveIt running, install the native dependencies once and start a physics
+demo. The setup command prefers the `python3.12` installed above and creates the
+ignored `.venv-mujoco/` environment using [simulation/requirements.txt](simulation/requirements.txt).
+
+```bash
+cd ~/projects/ur5e-ros2-pose-control
+./robot mujoco-setup
+
+# Establish a clear starting pose using the ROS mock driver.
+./robot move --position 0.4 0.1 0.4 --rpy-deg 180 0 0
+
+# Plan a new goal and simulate the trajectory in a native MuJoCo window.
+./robot mujoco --position 0.35 -0.1 0.45 --rpy-deg 180 0 30
+```
+
+Close the MuJoCo window after the final result to return to the terminal. Add
+`--headless` to run physics without a window. MuJoCo replays an exported plan;
+it does not send joint feedback to RViz, so the windows are not synchronized.
+See the [MuJoCo guide](simulation/README.md) for saved-plan replay and details.
+
 ## Input reference
 
 | Argument | Meaning |
@@ -166,11 +287,14 @@ Run these commands from the project directory:
 | `./robot start` | Build the image if necessary and start the container. |
 | `./robot pose` | Print the current tool pose. |
 | `./robot move ...` | Plan and execute a target pose. |
+| `./robot mujoco-setup` | Install optional native MuJoCo dependencies on macOS. |
+| `./robot mujoco ...` | Plan in ROS and replay with MuJoCo physics on macOS. |
+| `./robot export FILE ...` | Save a MoveIt plan as JSON without executing it. |
 | `./robot logs` | Follow startup, planning, and controller logs. |
 | `./robot shell` | Open a container shell with ROS and this package already sourced. |
 | `./robot stop` | Stop and remove this project's container; keep the image and source files. |
 | `./robot help` | Print the available commands. |
-| `colima status` | Check the Linux VM and its Docker runtime. |
+| `colima status` | On macOS, check the Linux VM and its Docker runtime. |
 | `docker ps` | List running containers in the selected Docker context. |
 
 Inside `./robot shell`, the underlying ROS command is:
@@ -180,29 +304,35 @@ ros2 run ur5e_pose_control move_to_pose --position 0.4 0.1 0.4 --rpy-deg 180 0 0
 ```
 
 Use `exit` to leave that shell. The `./robot` wrapper is a convenience for running
-the same ROS commands from the Mac.
+the same ROS commands from the host terminal.
 
 ## Stop or restart
 
-After the demonstration, run in the Mac terminal:
+Stop the project from the host terminal:
 
 ```bash
 ./robot stop
+```
+
+On macOS, optionally stop the Colima VM too:
+
+```bash
 colima stop
 ```
 
 `colima stop` also stops the VM used by any other containers on this Colima
 instance. You can leave Colima running if you still need those containers.
 
-To reset the robot to its startup pose while leaving Colima running:
+To reset the robot to its startup pose while leaving Docker Engine running:
 
 ```bash
 ./robot stop
 ./robot start
 ```
 
-Reload the RViz browser tab after a restart. Run the full Terminal 1 startup
-sequence again if Colima was stopped.
+Reload the RViz browser tab after a restart. On macOS, if Colima was stopped,
+run `colima start --cpus 4 --memory 6 --disk 40 --vm-type vz` and
+`docker context use colima` before `./robot start`.
 
 Python source is mounted from this directory, so normal Python edits take effect
 on the next command. The package is built each time the container starts. After
@@ -291,7 +421,10 @@ on a Colima VM with 4 CPUs and 6 GB RAM.
 
 | Symptom | What to check |
 | --- | --- |
-| Docker cannot connect to its engine | Start Colima, run `docker context use colima`, then check `docker info`. |
+| Clone says repository not found or access denied | Confirm that your GitHub account has access and your HTTPS credentials or SSH key are configured. |
+| `docker: 'compose' is not a docker command` or Buildx is missing | Install both plugins. On macOS, create the plugin links shown in the setup section. |
+| Docker cannot connect to its engine | On macOS, start Colima and run `docker context use colima`. On Linux, check the Docker service and user permissions. Verify with `docker info`. |
+| Build reports `exec format error` | Check `uname -m` and select the matching `platform` in `compose.yaml` before rebuilding. |
 | `service "robot" is not running` | Run `./robot start`; inspect `./robot logs` if it exits. |
 | Browser says connection refused or disconnected | Check `docker ps` and `./robot logs`, wait for startup, then reload the RViz URL. |
 | MoveIt is unavailable or no fresh transform arrives | Startup may still be in progress. Check the driver/controller logs, then retry `./robot pose`. |
@@ -304,12 +437,13 @@ on a Colima VM with 4 CPUs and 6 GB RAM.
 For diagnostics, run from the project directory:
 
 ```bash
-colima status
 docker context show
 docker info
 docker ps -a
 ./robot logs
 ```
+
+On macOS, also check `colima status`.
 
 IK success alone does not guarantee that a path will be found. During testing,
 one shoulder target of about 221 degrees timed out; its equivalent -139 degree
