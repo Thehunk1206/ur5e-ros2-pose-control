@@ -17,7 +17,9 @@ def nearest_joint_angle(angle, current, lower, upper):
 def finite_number(value):
     number = float(value)
     if not math.isfinite(number):
-        raise argparse.ArgumentTypeError("Expected a finite number, not NaN or infinity.")
+        raise argparse.ArgumentTypeError(
+            "Expected a finite number, not NaN or infinity."
+        )
     return number
 
 
@@ -35,12 +37,14 @@ def rpy_to_quaternion(roll, pitch, yaw):
     r, p, y = (math.radians(v) / 2 for v in (roll, pitch, yaw))
     cr, cp, cy = math.cos(r), math.cos(p), math.cos(y)
     sr, sp, sy = math.sin(r), math.sin(p), math.sin(y)
-    return normalize_quaternion((
-        sr * cp * cy - cr * sp * sy,
-        cr * sp * cy + sr * cp * sy,
-        cr * cp * sy - sr * sp * cy,
-        cr * cp * cy + sr * sp * sy,
-    ))
+    return normalize_quaternion(
+        (
+            sr * cp * cy - cr * sp * sy,
+            cr * sp * cy + sr * cp * sy,
+            cr * cp * sy - sr * sp * cy,
+            cr * cp * cy + sr * sp * sy,
+        )
+    )
 
 
 def pose_error(position, quaternion, actual_position, actual_quaternion):
@@ -59,13 +63,27 @@ def parse_args(argv=None):
     parser = argparse.ArgumentParser(
         description="Move UR5e tool0 to a pose in base_link. Position is in metres."
     )
-    parser.add_argument("--position", nargs=3, type=finite_number, metavar=("X", "Y", "Z"))
+    parser.add_argument(
+        "--position", nargs=3, type=finite_number, metavar=("X", "Y", "Z")
+    )
     orientation = parser.add_mutually_exclusive_group()
-    orientation.add_argument("--rpy-deg", nargs=3, type=finite_number, metavar=("ROLL", "PITCH", "YAW"))
-    orientation.add_argument("--quaternion", nargs=4, type=finite_number, metavar=("QX", "QY", "QZ", "QW"))
-    parser.add_argument("--current", action="store_true", help="Print the current pose and exit.")
-    parser.add_argument("--plan-only", action="store_true", help="Plan without moving the robot.")
-    parser.add_argument("--export-plan", metavar="FILE", help="Save a plan as JSON; implies --plan-only.")
+    orientation.add_argument(
+        "--rpy-deg", nargs=3, type=finite_number, metavar=("ROLL", "PITCH", "YAW")
+    )
+    orientation.add_argument(
+        "--quaternion", nargs=4, type=finite_number, metavar=("QX", "QY", "QZ", "QW")
+    )
+    parser.add_argument(
+        "--current", action="store_true", help="Print the current pose and exit."
+    )
+    parser.add_argument(
+        "--plan-only", action="store_true", help="Plan without moving the robot."
+    )
+    parser.add_argument(
+        "--export-plan",
+        metavar="FILE",
+        help="Save a plan as JSON; implies --plan-only.",
+    )
     args = parser.parse_args(argv)
     if args.export_plan:
         args.plan_only = True
@@ -76,8 +94,11 @@ def parse_args(argv=None):
     if args.position is None or (args.rpy_deg is None and args.quaternion is None):
         parser.error("Supply --position and either --rpy-deg or --quaternion.")
     try:
-        args.quaternion = (rpy_to_quaternion(*args.rpy_deg) if args.rpy_deg is not None
-                           else normalize_quaternion(args.quaternion))
+        args.quaternion = (
+            rpy_to_quaternion(*args.rpy_deg)
+            if args.rpy_deg is not None
+            else normalize_quaternion(args.quaternion)
+        )
     except ValueError as error:
         parser.error(str(error))
     return args

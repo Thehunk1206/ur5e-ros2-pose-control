@@ -13,7 +13,9 @@ setup(
         ("share/" + package_name + "/config", glob("config/*")),
     ],
     install_requires=["setuptools"],
-    entry_points={"console_scripts": [
-        "move_to_pose = ur5e_pose_control.move_to_pose:main",
-    ]},
+    entry_points={
+        "console_scripts": [
+            "move_to_pose = ur5e_pose_control.move_to_pose:main",
+        ]
+    },
 )

@@ -32,16 +32,24 @@ def numbers(value, shape, description):
     """Reject malformed or non-finite numeric data before starting physics."""
     array = np.asarray(value, dtype=float)
     if array.shape != shape or not np.isfinite(array).all():
-        raise ValueError(f"{description} must contain finite numbers with shape {shape}.")
+        raise ValueError(
+            f"{description} must contain finite numbers with shape {shape}."
+        )
     return array
 
 
 def read_plan(path, model):
     """Validate exported data and map trajectory columns by joint name."""
     plan = json.loads(path.read_text())
-    identity = tuple(plan.get(key) for key in (
-        "version", "robot", "base_frame", "tool_frame",
-    ))
+    identity = tuple(
+        plan.get(key)
+        for key in (
+            "version",
+            "robot",
+            "base_frame",
+            "tool_frame",
+        )
+    )
     if identity != (1, "ur5e", "base_link", "tool0"):
         raise ValueError("Expected version 1 UR5e plan for tool0 in base_link.")
     names = plan["joint_names"]
@@ -53,7 +61,9 @@ def read_plan(path, model):
         raise ValueError("The trajectory is empty.")
     times = numbers([p["time"] for p in points], (len(points),), "Timestamps")
     if abs(times[0]) > 1e-9 or np.any(np.diff(times) <= 0) or times[-1] > 120:
-        raise ValueError("Times must start at zero, increase strictly, and end within 120 s.")
+        raise ValueError(
+            "Times must start at zero, increase strictly, and end within 120 s."
+        )
     positions = numbers(
         [p["positions"] for p in points], (len(points), 6), "Positions"
     )[:, order]
@@ -63,7 +73,9 @@ def read_plan(path, model):
         joint = model.joint(name)
         lower = max(bounds[column, 0], joint.range[0])
         upper = min(bounds[column, 1], joint.range[1])
-        outside = (positions[:, column] < lower - 1e-6) | (positions[:, column] > upper + 1e-6)
+        outside = (positions[:, column] < lower - 1e-6) | (
+            positions[:, column] > upper + 1e-6
+        )
         if lower >= upper or np.any(outside):
             raise ValueError(f"Trajectory violates joint limits: {name}.")
     target = plan["target"]
@@ -80,7 +92,8 @@ def read_plan(path, model):
         mujoco.mj_forward(model, check)
         distance, angle = pose_error(
             numbers(sample["position"], (3,), "FK position"),
-            normalize_quaternion(sample["quaternion"]), *tool_pose(check),
+            normalize_quaternion(sample["quaternion"]),
+            *tool_pose(check),
         )
         max_distance, max_angle = max(max_distance, distance), max(max_angle, angle)
     if max_distance > 1e-5 or max_angle > 1e-5:
@@ -93,7 +106,9 @@ def read_plan(path, model):
     mujoco.mj_forward(model, check)
     distance, angle = pose_error(position, quaternion, *tool_pose(check))
     if distance > POSITION_TOLERANCE or angle > ORIENTATION_TOLERANCE:
-        raise ValueError("The plan's final joint configuration does not reach its target pose.")
+        raise ValueError(
+            "The plan's final joint configuration does not reach its target pose."
+        )
     print(
         f"MODEL CHECK PASSED: ROS/MuJoCo FK differ by at most {max_distance * 1000:.6f} mm.",
         flush=True,
@@ -122,8 +137,10 @@ def check_contacts(model, data):
         mujoco.mj_contactForce(model, data, index, force)
         if force[0] > 1.0:
             contact = data.contact[index]
-            bodies = [model.body(model.geom_bodyid[g]).name
-                      for g in (contact.geom1, contact.geom2)]
+            bodies = [
+                model.body(model.geom_bodyid[g]).name
+                for g in (contact.geom1, contact.geom2)
+            ]
             raise RuntimeError(
                 f"Physical contact at {data.time:.3f} s: {bodies[0]} / {bodies[1]} "
                 f"({force[0]:.1f} N). Replay stopped."
@@ -148,10 +165,14 @@ def simulate(model, plan, headless=False, close_on_finish=False):
     data.qpos[:] = positions[0]  # The only direct joint-position assignment.
     data.ctrl[:] = positions[0]
     mujoco.mj_forward(model, data)
-    print(f"SIMULATING: {times[-1]:.2f} s motion, then 2 s holding the target.", flush=True)
+    print(
+        f"SIMULATING: {times[-1]:.2f} s motion, then 2 s holding the target.",
+        flush=True,
+    )
 
-    context = (nullcontext(None) if headless
-               else mujoco.viewer.launch_passive(model, data))
+    context = (
+        nullcontext(None) if headless else mujoco.viewer.launch_passive(model, data)
+    )
     with context as viewer:
         if viewer is not None:
             viewer.cam.lookat[:] = [0.15, 0, 0.35]
@@ -173,7 +194,8 @@ def simulate(model, plan, headless=False, close_on_finish=False):
                 # makes it a PD tracker with feedforward, using simulated forces.
                 command = desired + (damping * velocity + data.qfrc_bias) / gains
                 data.ctrl[:] = np.clip(
-                    command, model.actuator_ctrlrange[:, 0],
+                    command,
+                    model.actuator_ctrlrange[:, 0],
                     model.actuator_ctrlrange[:, 1],
                 )
                 mujoco.mj_step(model, data)
@@ -185,21 +207,31 @@ def simulate(model, plan, headless=False, close_on_finish=False):
                 tracking = float(np.max(np.abs(data.qpos - desired_now)))
                 max_tracking = max(max_tracking, tracking)
                 if tracking > 0.15:
-                    raise RuntimeError(f"Joint tracking error is too large: {tracking:.3f} rad.")
+                    raise RuntimeError(
+                        f"Joint tracking error is too large: {tracking:.3f} rad."
+                    )
             if viewer is not None and data.time >= next_frame:
                 viewer.sync()
                 next_frame = data.time + 1 / 60
                 time.sleep(max(0, start + data.time - time.monotonic()))
         # Verify the physical state, rather than the commanded joint targets.
-        distance, angle = pose_error(target_position, target_quaternion, *tool_pose(data))
+        distance, angle = pose_error(
+            target_position, target_quaternion, *tool_pose(data)
+        )
         print(
             f"Final simulated error: {distance * 1000:.3f} mm, "
-            f"{math.degrees(angle):.4f} degrees", flush=True,
+            f"{math.degrees(angle):.4f} degrees",
+            flush=True,
         )
         print(f"Peak joint tracking error: {max_tracking:.6f} rad", flush=True)
-        if (distance > POSITION_TOLERANCE or angle > ORIENTATION_TOLERANCE
-                or np.max(np.abs(data.qvel)) >= 0.01):
-            raise RuntimeError("Simulation did not settle within the tool-pose tolerances.")
+        if (
+            distance > POSITION_TOLERANCE
+            or angle > ORIENTATION_TOLERANCE
+            or np.max(np.abs(data.qvel)) >= 0.01
+        ):
+            raise RuntimeError(
+                "Simulation did not settle within the tool-pose tolerances."
+            )
         print(
             "MUJOCO SUCCESS: simulated tool0 reached the requested position AND orientation.",
             flush=True,
@@ -224,12 +256,22 @@ def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Plan a UR5e pose using ROS 2, then simulate it in native MuJoCo.",
         epilog="Pose: --position X Y Z plus --rpy-deg R P Y or --quaternion X Y Z W. "
-               "Add --plan-only to export without replay. Example: ./robot mujoco "
-               "--position 0.4 0.1 0.4 --rpy-deg 180 0 0",
+        "Add --plan-only to export without replay. Example: ./robot mujoco "
+        "--position 0.4 0.1 0.4 --rpy-deg 180 0 0",
     )
-    parser.add_argument("--headless", action="store_true", help="Run physics without a window.")
-    parser.add_argument("--close-on-finish", action="store_true", help="Close the viewer after verification.")
-    parser.add_argument("--replay", type=Path, help="Replay an exported JSON plan; no ROS connection needed.")
+    parser.add_argument(
+        "--headless", action="store_true", help="Run physics without a window."
+    )
+    parser.add_argument(
+        "--close-on-finish",
+        action="store_true",
+        help="Close the viewer after verification.",
+    )
+    parser.add_argument(
+        "--replay",
+        type=Path,
+        help="Replay an exported JSON plan; no ROS connection needed.",
+    )
     options, pose_arguments = parser.parse_known_args(argv)
     try:
         if options.replay:
@@ -239,11 +281,15 @@ def main(argv=None):
         else:
             args = parse_args(pose_arguments)
             if args.current or args.export_plan:
-                parser.error("Use ./robot pose for ROS feedback and ./robot export for a custom output file.")
+                parser.error(
+                    "Use ./robot pose for ROS feedback and ./robot export for a custom output file."
+                )
             directory = ROOT / "artifacts" / "mujoco"
             directory.mkdir(parents=True, exist_ok=True)
             path = directory / f"plan-{time.time_ns()}.json"
-            result = subprocess.run([str(ROOT / "robot"), "export", str(path), *pose_arguments])
+            result = subprocess.run(
+                [str(ROOT / "robot"), "export", str(path), *pose_arguments]
+            )
             if result.returncode:
                 return result.returncode
             print(f"Saved plan: {path.relative_to(ROOT)}", flush=True)
@@ -256,7 +302,14 @@ def main(argv=None):
     except KeyboardInterrupt:
         print("MuJoCo demo interrupted.", file=sys.stderr)
         return 130
-    except (ValueError, KeyError, TypeError, IndexError, OSError, RuntimeError) as error:
+    except (
+        ValueError,
+        KeyError,
+        TypeError,
+        IndexError,
+        OSError,
+        RuntimeError,
+    ) as error:
         print(f"MUJOCO ERROR: {error}", file=sys.stderr)
         return 1
 
