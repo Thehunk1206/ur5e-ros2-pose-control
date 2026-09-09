@@ -29,12 +29,12 @@ MoveIt planning with native physics simulation.
 
 This implements **Stage 1** of the assignment: ROS 2, the official UR5e driver,
 Python terminal input, and RViz. The supplied launch always uses **mock hardware**.
-Isaac Sim is the optional Stage 2 and is not included.
-
-An additional **native macOS MuJoCo physics demo** reuses the same pose input and
-MoveIt planner. See the [MuJoCo setup and demo guide](simulation/README.md).
-MuJoCo executes exported plans using simulated motors; it does not replace the
-mandatory ROS driver/RViz demonstration or implement the Isaac Sim bonus.
+The optional Stage 2, **NVIDIA Isaac Sim**, has not been explored yet because we
+do not currently have access to an NVIDIA GPU. Instead, we implemented a
+**native macOS MuJoCo physics demo**, reusing the same pose input and MoveIt
+planner to execute exported plans using simulated motors. This provides an
+additional physics demonstration alongside ROS/RViz; the Isaac Sim bonus remains
+unimplemented. See the [MuJoCo setup and demo guide](simulation/README.md).
 
 ## Installation and setup
 

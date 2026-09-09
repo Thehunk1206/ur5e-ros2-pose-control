@@ -4,23 +4,6 @@ Enter a tool position and orientation, let the existing ROS 2/MoveIt node plan,
 then watch a native macOS MuJoCo window simulate that plan. The runner measures
 the resulting tool pose and checks both position and orientation.
 
-## Alignment with the assignment
-
-The source requirements are in [UR Simulation and Motion Planning.pdf](../UR%20Simulation%20and%20Motion%20Planning.pdf).
-
-| Requirement | Implementation |
-| --- | --- |
-| Correct ROS 2 UR5e driver | Existing official `ur_robot_driver`, with mock hardware in the supplied launch. |
-| Python terminal input for position and orientation | Existing `move_to_pose.py` and its pose parser; MuJoCo accepts the same pose arguments. |
-| Commands through ROS to the UR5e | `./robot move` uses MoveIt and the driver's trajectory controller. |
-| Mandatory RViz motion | Existing `./robot start` and `./robot move`; see the main README. |
-| Physics simulation on this Mac | Additional `./robot mujoco` command: ROS planning, exported trajectory, native actuator-driven physics. |
-| Bonus Isaac Sim | Not implemented. MuJoCo is an alternative demonstration, not the named bonus. |
-
-MuJoCo replay does not send execution commands through the UR driver. The
-existing ROS/RViz workflow demonstrates that requirement. Preserve both parts
-when presenting this project.
-
 ## Start and demonstrate
 
 Tested here: Apple M1 Pro, macOS 26.2, native arm64 Python 3.12, MuJoCo 3.12.0.
@@ -30,10 +13,10 @@ command prefers `python3.12`, falling back to `python3`.
 Terminal 1, from the project directory:
 
 First follow the [host installation and clone instructions](../README.md#installation-and-setup).
-The paths below assume the example clone location `~/projects/ur5e-ros2-pose-control`.
+The paths below assume the example clone location `~/ur5e-ros2-pose-control`.
 
 ```bash
-cd ~/projects/ur5e-ros2-pose-control
+cd ~/ur5e-ros2-pose-control
 ./robot mujoco-setup
 colima start --cpus 4 --memory 6 --disk 40 --vm-type vz
 docker context use colima
@@ -44,7 +27,7 @@ open 'http://localhost:6080/vnc.html?autoconnect=true&resize=scale'
 Wait for the robot to appear in RViz. Terminal 2:
 
 ```bash
-cd ~/projects/ur5e-ros2-pose-control
+cd ~/ur5e-ros2-pose-control
 ./robot mujoco
 ```
 
@@ -139,32 +122,6 @@ MuJoCo's configured force limits still apply. This compensates gravity through
 motor commands; it does not disable gravity or teleport the joints. Waypoint
 interpolation is linear; exported derivatives are retained for inspection but
 are not used to reconstruct MoveIt's exact interpolation.
-
-## Validation
-
-The persistent session was checked on 9 September 2026 with consecutive moves
-in one native window, plan-only followed by unchanged simulated feedback, an
-unreachable goal, invalid numeric input, and a successful move after those errors.
-The next plan's first joints matched the previous simulated state; the simulation
-clock continued across moves. Saved headless replay, `quit`, and Ctrl-C at the
-prompt were also checked. No test suite is included in the repository.
-
-Verified on this Mac on 8 September 2026:
-
-| Requested pose (metres; RPY degrees) | Final position error | Final orientation error |
-| --- | --- | --- |
-| `0.4 0.1 0.4`; `180 0 0` | 0.035 mm | 0.0061 degrees |
-| `0.35 -0.1 0.45`; `180 0 30` | 0.034 mm | 0.0023 degrees |
-| `0.2 0.2 0.2`; `20 0 0` | 0.023 mm | 0.0122 degrees |
-
-Invalid numeric input and an unreachable goal were checked through
-`./robot mujoco`; neither started
-replay. Saved-plan replay passed with an unavailable Docker endpoint.
-
-These are results of particular plans and starting states, not universal accuracy
-claims. Peak joint tracking error was below 0.0006 rad for these runs. The native
-viewer was opened and visually inspected, and ROS poses before/after export and
-replay were unchanged.
 
 ## Limitations and failures
 
