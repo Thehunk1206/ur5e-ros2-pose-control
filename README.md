@@ -6,12 +6,24 @@ node checks the final reported pose.
 
 ## Demo videos
 
-Watch the recorded demos:
+Animated excerpts of both demos are shown below. Click a preview or its link to
+open the full recording.
 
-| Demo | Recording |
-| --- | --- |
-| **ROS 2 + RViz** — pose commands with the UR5e mock driver and MoveIt. | [Watch the RViz demo](assets/ros2_rviz_demo.mp4) |
-| **ROS 2 + MuJoCo** — MoveIt planning with native physics simulation. | [Watch the MuJoCo demo](assets/ros2_mujoco_demo.mp4) |
+### ROS 2 + RViz
+
+Pose commands with the UR5e mock driver and MoveIt.
+
+[![Animated ROS 2 and RViz demo showing the UR5e arm moving](assets/ros2_rviz_demo_preview.gif)](assets/ros2_rviz_demo.mp4)
+
+[Watch the full RViz recording](assets/ros2_rviz_demo.mp4)
+
+### ROS 2 + MuJoCo
+
+MoveIt planning with native physics simulation.
+
+[![Animated ROS 2 and MuJoCo demo showing the simulated UR5e arm moving](assets/ros2_mujoco_demo_preview.gif)](assets/ros2_mujoco_demo.mp4)
+
+[Watch the full MuJoCo recording](assets/ros2_mujoco_demo.mp4)
 
 ## Project scope
 
@@ -439,39 +451,6 @@ arguments, `130` interrupted by Ctrl-C.
 ROS 2 Jazzy, UR driver/config 3.8.0, MoveIt core 2.12.4, and RViz 14.1.22,
 on a Colima VM with 4 CPUs and 6 GB RAM.
 
-## Troubleshooting
-
-| Symptom | What to check |
-| --- | --- |
-| Clone says repository not found or access denied | Confirm that your GitHub account has access and your HTTPS credentials or SSH key are configured. |
-| `docker: 'compose' is not a docker command` or Buildx is missing | Install both plugins. On macOS, create the plugin links shown in the setup section. |
-| Docker cannot connect to its engine | On macOS, start Colima and run `docker context use colima`. On Linux, check the Docker service and user permissions. Verify with `docker info`. |
-| Build reports `exec format error` | Check `uname -m` and select the matching `platform` in `compose.yaml` before rebuilding. |
-| `service "robot" is not running` | Run `./robot start`; inspect `./robot logs` if it exits. |
-| Browser says connection refused or disconnected | Check `docker ps` and `./robot logs`, wait for startup, then reload the RViz URL. |
-| MoveIt is unavailable or no fresh transform arrives | Startup may still be in progress. Check the driver/controller logs, then retry `./robot pose`. |
-| `NO_IK_SOLUTION` or a planning failure | Check metres versus degrees, the reference frame, and the orientation. Try one of the verified demo poses. |
-| `IK SUCCESS` followed by a planning failure | IK found a destination configuration, but the planner could not connect it to the current state. Read `./robot logs` for the detailed reason, such as a timeout. |
-| Successful command but no visible motion | The robot may already be at that pose. Use the other demo pose and check the final error output. |
-| Port 6080 is already in use | Use `lsof -nP -iTCP:6080 -sTCP:LISTEN` to identify the listener and resolve the port conflict. |
-| RViz disconnects after restarting the container | Reload the browser tab to reconnect to the new noVNC session. |
-
-For diagnostics, run from the project directory:
-
-```bash
-docker context show
-docker info
-docker ps -a
-./robot logs
-```
-
-On macOS, also check `colima status`.
-
-IK success alone does not guarantee that a path will be found. During testing,
-one shoulder target of about 221 degrees timed out; its equivalent -139 degree
-target planned successfully. The script now chooses the nearest equivalent angle
-within the model's limits before planning. A different IK branch, joint limits, or collisions can still
-prevent planning. A timeout does not prove that the requested pose is unreachable.
 
 ## Limitations
 
