@@ -6,15 +6,9 @@ import xml.etree.ElementTree as ET
 import mujoco
 import numpy as np
 
+from ur5e_pose_control.pose_math import JOINTS
+
 MODEL_DIR = Path(__file__).resolve().parent / "models" / "ur5e"
-JOINTS = (
-    "shoulder_pan_joint",
-    "shoulder_lift_joint",
-    "elbow_joint",
-    "wrist_1_joint",
-    "wrist_2_joint",
-    "wrist_3_joint",
-)
 
 
 def load_model():

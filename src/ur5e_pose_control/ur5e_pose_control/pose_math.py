@@ -3,6 +3,15 @@
 import argparse
 import math
 
+JOINTS = (
+    "shoulder_pan_joint",
+    "shoulder_lift_joint",
+    "elbow_joint",
+    "wrist_1_joint",
+    "wrist_2_joint",
+    "wrist_3_joint",
+)
+
 
 def nearest_joint_angle(angle, current, lower, upper):
     """Choose angle + k*2*pi nearest the current angle, within model limits."""
@@ -84,7 +93,18 @@ def parse_args(argv=None):
         metavar="FILE",
         help="Save a plan as JSON; implies --plan-only.",
     )
+    parser.add_argument(
+        "--start-joints",
+        nargs=6,
+        type=finite_number,
+        metavar="RAD",
+        help="Simulation start joints in shoulder-to-wrist order; requires --export-plan.",
+    )
     args = parser.parse_args(argv)
+    if args.start_joints is not None and not args.export_plan:
+        parser.error(
+            "--start-joints requires --export-plan; it cannot execute a ROS motion."
+        )
     if args.export_plan:
         args.plan_only = True
     if args.current:

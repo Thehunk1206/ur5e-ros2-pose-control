@@ -17,6 +17,7 @@ Conventions:
 
 ``--current`` only reads feedback. ``--plan-only`` solves IK and plans a path
 without executing it. ``--export-plan FILE`` also saves that plan for MuJoCo.
+For export only, ``--start-joints`` supplies the simulated start configuration.
 Argument parsing and small mathematical helpers live in
 ``pose_math.py``. Each command creates one client node and exits when finished.
 """
@@ -47,7 +48,12 @@ from rclpy.time import Time
 from shape_msgs.msg import SolidPrimitive
 from tf2_ros import Buffer, TransformException, TransformListener
 
-from ur5e_pose_control.pose_math import nearest_joint_angle, parse_args, pose_error
+from ur5e_pose_control.pose_math import (
+    JOINTS,
+    nearest_joint_angle,
+    parse_args,
+    pose_error,
+)
 
 # These names must match the UR model and MoveIt configuration in the launch file.
 BASE = "base_link"
@@ -139,8 +145,8 @@ def make_goal(joint_state, current_positions, joint_limits, plan_only=False):
     goal.request.allowed_planning_time = 10.0
     goal.request.num_planning_attempts = 1
     # Scaling factors are fractions of the configured joint speed/acceleration limits.
-    goal.request.max_velocity_scaling_factor = 0.1
-    goal.request.max_acceleration_scaling_factor = 0.1
+    goal.request.max_velocity_scaling_factor = 0.4
+    goal.request.max_acceleration_scaling_factor = 0.3
     goal.planning_options.plan_only = plan_only
     # Empty diffs preserve the server's planning scene and current robot state.
     goal.planning_options.planning_scene_diff.is_diff = True
@@ -365,7 +371,9 @@ class PoseClient(Node):
             flush=True,
         )
 
-    def move(self, position, quaternion, plan_only=False, export_path=None):
+    def move(
+        self, position, quaternion, plan_only=False, export_path=None, start_joints=None
+    ):
         """Solve IK, request a plan/motion, and verify the reported final pose.
 
         Args:
@@ -373,11 +381,16 @@ class PoseClient(Node):
             quaternion: Target orientation as normalized (x, y, z, w).
             plan_only: If True, stop after successful planning without moving.
             export_path: Optional JSON output file; always implies planning only.
+            start_joints: Optional six simulated joint angles, allowed only for export.
 
         Print progress and return None on success. Failures raise an exception
         for main() to report and, when needed, cancel the pending action.
         Successful planning alone does not verify an executed final pose.
         """
+        if start_joints is not None and export_path is None:
+            raise ValueError(
+                "A simulation start state is allowed only for plan export."
+            )
         plan_only = plan_only or export_path is not None
         # 1. Require the server and live robot feedback before asking for motion.
         if not self.action.wait_for_server(timeout_sec=15.0):
@@ -385,12 +398,27 @@ class PoseClient(Node):
                 "MoveIt action server is unavailable. "
                 "Start the demo and check its logs."
             )
-        self.current_pose()  # Require live state before submitting a motion request.
+        if start_joints is None:
+            self.current_pose()  # Require live feedback for ROS motion requests.
         if not self.ik.wait_for_service(timeout_sec=5.0):
             raise RuntimeError("MoveIt inverse-kinematics service is unavailable.")
 
         # 2. Use current joints as the IK seed and solve for the complete tool pose.
         state, limits = self.planning_state()
+        if start_joints is not None:
+            # Seed IK and planning with the same simulated state. This changes
+            # only this request; it never changes the ROS robot's joint state.
+            if len(start_joints) != len(JOINTS):
+                raise ValueError("Expected six simulation start joint angles.")
+            for name, value in zip(JOINTS, start_joints):
+                lower, upper = limits[name]
+                if not math.isfinite(value) or not lower <= value <= upper:
+                    raise ValueError(f"Simulation start joint outside limits: {name}.")
+                state.joint_state.position[state.joint_state.name.index(name)] = value
+            state.joint_state.velocity = []
+            state.joint_state.effort = []
+            state.joint_state.header.stamp = self.get_clock().now().to_msg()
+            state.is_diff = False
         current = dict(zip(state.joint_state.name, state.joint_state.position))
         solution = self.wait(
             self.ik.call_async(make_ik_request(position, quaternion, state)),
@@ -405,6 +433,8 @@ class PoseClient(Node):
 
         # 3. Send the joint goal. Acceptance only means the server will process it.
         goal = make_goal(solution.solution.joint_state, current, limits, plan_only)
+        if start_joints is not None:
+            goal.request.start_state = state
         if export_path is not None:
             # MuJoCo has a ground plane at z=0. Include the same surface in this
             # request's scene diff, without changing the shared RViz demo scene.
@@ -551,7 +581,13 @@ def main(argv=None):
                 f"position={args.position}, quaternion={args.quaternion}",
                 flush=True,
             )
-            node.move(args.position, args.quaternion, args.plan_only, args.export_plan)
+            node.move(
+                args.position,
+                args.quaternion,
+                args.plan_only,
+                args.export_plan,
+                args.start_joints,
+            )
     except KeyboardInterrupt:
         node.cancel()
         exit_code = 130

@@ -4,6 +4,17 @@ Enter a tool position and orientation in the terminal. A small Python ROS 2 node
 asks MoveIt 2 to plan and execute the motion. RViz shows the UR5e moving, and the
 node checks the final reported pose.
 
+## Demo videos
+
+Watch the recorded demos:
+
+| Demo | Recording |
+| --- | --- |
+| **ROS 2 + RViz** — pose commands with the UR5e mock driver and MoveIt. | [Watch the RViz demo](assets/ros2_rviz_demo.mp4) |
+| **ROS 2 + MuJoCo** — MoveIt planning with native physics simulation. | [Watch the MuJoCo demo](assets/ros2_mujoco_demo.mp4) |
+
+## Project scope
+
 This implements **Stage 1** of the assignment: ROS 2, the official UR5e driver,
 Python terminal input, and RViz. The supplied launch always uses **mock hardware**.
 Isaac Sim is the optional Stage 2 and is not included.
@@ -246,16 +257,27 @@ ignored `.venv-mujoco/` environment using [simulation/requirements.txt](simulati
 cd ~/projects/ur5e-ros2-pose-control
 ./robot mujoco-setup
 
-# Establish a clear starting pose using the ROS mock driver.
-./robot move --position 0.4 0.1 0.4 --rpy-deg 180 0 0
-
-# Plan a new goal and simulate the trajectory in a native MuJoCo window.
-./robot mujoco --position 0.35 -0.1 0.45 --rpy-deg 180 0 30
+# Open a persistent native window and terminal command prompt.
+./robot mujoco
 ```
 
-Close the MuJoCo window after the final result to return to the terminal. Add
-`--headless` to run physics without a window. MuJoCo replays an exported plan;
-it does not send joint feedback to RViz, so the windows are not synchronized.
+At the `mujoco>` prompt in the same terminal, enter these commands one at a time:
+
+```text
+move --position 0.4 0.1 0.4 --rpy-deg 180 0 0
+move --position 0.35 -0.1 0.45 --rpy-deg 180 0 30
+pose
+quit
+```
+
+The window stays open between moves. Each plan starts from the current simulated
+joints, so the arm continues from its last pose. Add `--plan-only` to a pose to
+check it without motion. Physics pauses during input and planning. Type `quit`,
+press Ctrl-C, or close the window to end the session.
+
+You can still pass an initial pose to `./robot mujoco`. Add `--headless` for a
+single run without a window, or `--close-on-finish` for a window that closes after
+that motion. MuJoCo does not send joint feedback to RViz; the views are separate.
 See the [MuJoCo guide](simulation/README.md) for saved-plan replay and details.
 
 ## Input reference
@@ -288,7 +310,7 @@ Run these commands from the project directory:
 | `./robot pose` | Print the current tool pose. |
 | `./robot move ...` | Plan and execute a target pose. |
 | `./robot mujoco-setup` | Install optional native MuJoCo dependencies on macOS. |
-| `./robot mujoco ...` | Plan in ROS and replay with MuJoCo physics on macOS. |
+| `./robot mujoco [pose arguments]` | Open MuJoCo and accept successive poses at its terminal prompt. |
 | `./robot export FILE ...` | Save a MoveIt plan as JSON without executing it. |
 | `./robot logs` | Follow startup, planning, and controller logs. |
 | `./robot shell` | Open a container shell with ROS and this package already sourced. |

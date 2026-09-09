@@ -13,8 +13,9 @@ if [[ "$command" == help || "$command" == --help ]]; then
                                Move to a pose (metres and degrees)
 ./robot move ... --plan-only    Check planning without executing
 ./robot mujoco-setup            Install native MuJoCo in a local Python environment
+./robot mujoco                  Open a persistent window and pose command prompt
 ./robot mujoco --position X Y Z --rpy-deg R P Y
-                               Plan in ROS, then simulate in native MuJoCo
+                               Simulate a pose, then accept more at mujoco>
 ./robot mujoco ... --headless   Verify physics without opening a window
 ./robot export FILE ...         Save a MoveIt plan as JSON without executing
 ./robot logs                    Follow startup and robot logs
